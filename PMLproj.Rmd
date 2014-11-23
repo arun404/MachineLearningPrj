@@ -1,0 +1,134 @@
+---
+title: "PML - Project"
+author: "AVonoz"
+date: "Sunday, November 23, 2014"
+output: html_document
+---
+
+Practical Machine Learning Course Project writeup
+
+##Description
+
+###Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+###The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har
+
+
+### Load Data
+
+#### Data has been downloaded to working directory
+
+```{r}
+library(caret)
+setwd("C://Users//Arun//Documents//Coursera//Practical Machine Learning//Project//")
+
+trainset <- read.table("pml-training.csv",sep=",",na.strings = c("NA",""),header=TRUE)
+testset <- read.table("pml-testing.csv",sep=",",na.strings = c("NA",""),header=TRUE)
+
+#head(trainset)
+
+
+```
+The training data has `r dim(trainset)[[1]]` observations and `r dim(trainset)[[2]]` features.  
+
+
+### Clean Data
+#### Remove missing values 
+#### Delete irrelevant features
+#### Break the data into train and test sets
+
+```{r}
+
+set.seed(1234)
+
+# Partitioning the training dataset into 70% train data and 30% cross validation data
+
+inTrain <- createDataPartition(trainset$classe, p=0.70, list=FALSE)
+training <- trainset[inTrain,]
+validation <- trainset[-inTrain,]
+
+#This will remove near zero variance predictors
+nearZeroColumns <- nearZeroVar(training, saveMetrics = TRUE)
+training <- training[, nearZeroColumns$nzv==FALSE]
+
+#This will remove irrelevant predictors (x, user_name, raw time stamp 1  and 2, new_window and num_window)
+training<-training[,7:ncol(training)]
+validation<-validation[,7:ncol(validation)]
+testset<-testset[,7:ncol(testset)]
+
+classe<-training$classe
+training<-training[,colSums(is.na(training)) == 0]
+nums <- sapply(training, is.numeric)
+training<-cbind(classe,training[,nums])
+training$X<-training$num_window<-NULL
+
+
+```
+
+
+### Build Model 
+#### Using random forest - for more acccuracy
+#### Here we are going to fit the model on the train dataset and print the model
+
+```{r}
+
+#head(training)
+
+#fit <- train(training$classe ~ .,data=training, method="rf")
+fit <- randomForest:::randomForest(training$classe ~ ., data =training, importance = TRUE, ntrees = 10)
+
+#save(fit,file="fit.RData")
+#load(file = "./fit.RData")
+
+#fit$results
+ print(fit)
+
+
+```
+
+### Cross Validate the model
+
+#### The below will check for In-sample accuracy
+```{r}
+
+# Training set accuracy
+
+ptraining <- predict(fit, training)
+print(confusionMatrix(ptraining, training$classe))
+
+```
+
+#### The below will check for Out of sample accuracy
+
+```{r}
+ 
+# Out of Sample accuracy on validation set
+
+pvalidation <- predict(fit, validation)
+print(confusionMatrix(pvalidation, validation$classe))
+
+```
+
+
+#### Conclusion drawn from the cross validation:
+
+Out of Sample Accuracy is always less than in sample accuracy
+
+
+
+###Prediction of the algorithm for the 20 test cases
+
+```{r}
+
+test_prediction<-predict(fit, newdata=testset)
+test_prediction
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(test_prediction)
+
+```
